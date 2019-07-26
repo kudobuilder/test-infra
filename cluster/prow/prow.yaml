@@ -443,31 +443,6 @@ spec:
     name: metrics
   type: NodePort
 ---
-apiVersion: extensions/v1beta1
-kind: Ingress
-metadata:
-  namespace: prow
-  name: ing
-  annotations:
-    certmanager.k8s.io/cluster-issuer: letsencrypt
-spec:
-  rules:
-  - host: prow.kudo.dev
-    http:
-      paths:
-      - path: /
-        backend:
-          serviceName: deck
-          servicePort: 80
-      - path: /hook
-        backend:
-          serviceName: hook
-          servicePort: 8888
-  tls:
-  - hosts:
-    - prow.kudo.dev
-    secretName: prow-cert
----
 apiVersion: apps/v1
 kind: Deployment
 metadata:

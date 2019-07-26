@@ -5,6 +5,10 @@ terraform {
   }
 }
 
+variable "zone" {
+  default = "prow.kudo.dev"
+}
+
 provider "github" {
   token        = "${data.google_kms_secret.github.plaintext}"
   organization = "kudobuilder"
@@ -18,6 +22,13 @@ provider "kubernetes" {
   host                   = "${module.kubernetes.cluster-address}"
   token                  = "${module.kubernetes.token}"
   cluster_ca_certificate = "${module.kubernetes.cluster-ca}"
+}
+
+module "dns" {
+  source = "./dns"
+  address = module.prow.address
+  name = "prow"
+  zone = var.zone
 }
 
 module "kms" {
@@ -49,6 +60,7 @@ module "flux" {
 module "prow" {
   source = "./prow"
 
+  hostname = var.zone
   gcs_bucket_name = "kudo-prow-logs"
   github_token    = "${data.google_kms_secret.github.plaintext}"
 }
@@ -56,7 +68,7 @@ module "prow" {
 module "kudobuilder-repo" {
   source = "./repo"
 
-  zone      = "prow.kudo.dev"
+  zone      = var.zone
   prow_hmac = "${module.prow.prow-hmac}"
 
   repositories = [
@@ -73,4 +85,8 @@ data "google_kms_secret" "github" {
 data "google_kms_secret" "slack_token" {
   crypto_key = "${module.kms.key}"
   ciphertext = "CiQApyKnkI5fBgUubntPTDm37SjpODZ/GctqWEawsPqZs9ZkGpISdgAAIP2MSlXT5BEHuiSpgC8p34SNlnR5jzwEf3ShOUn5heV9Q9Rib8GQdpxtFd4aF4f3XnYifROHnkW7PVL7NAeb8AeVcZaWwzrvPskWR7xHLq/AbsDNRvUfcWKwkwMK9NUyT6WIgGWplOA68QOEfuCk8MFFotk="
+}
+
+output "nameservers" {
+  value = "${module.dns.nameservers}"
 }
