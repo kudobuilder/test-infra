@@ -1,0 +1,62 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: github
+  labels:
+    app: github
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: github
+  template:
+    metadata:
+      labels:
+        app: github
+    spec:
+      containers:
+      - name: github
+        image: openresty/openresty:1.15.8.1-alpine
+        volumeMounts:
+        - name: config
+          mountPath: /etc/nginx/conf.d/
+      volumes:
+      - name: config
+        configMap:
+          name: github-nginx
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: github-nginx
+data:
+  github.conf: |
+    server {
+      listen       80;
+      server_name  github;
+
+      access_log /dev/stdout;
+
+      add_header Content-Type application/json;
+
+      location / {
+        content_by_lua 'ngx.say("<p>hello, world</p>")';
+      }
+
+      location /user {
+        content_by_lua_block {
+          ngx.say("{\"login\":\"ci-mergebot\"}")
+        }
+      }
+    }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: github
+spec:
+  selector:
+    app: github
+  ports:
+  - protocol: TCP
+    port: 80

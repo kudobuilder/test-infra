@@ -1,0 +1,69 @@
+apiVersion: kudo.dev/v1alpha1
+kind: TestStep
+delete:
+- apiVersion: prow.k8s.io/v1
+  kind: ProwJob
+  namespace: prow-jobs
+  labels:
+    prow.k8s.io/job: test-docker
+    prow.k8s.io/refs.org: kudobuilder
+    prow.k8s.io/refs.repo: test-infra-test
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: trigger-hook
+  namespace: prow
+spec:
+  restartPolicy: OnFailure
+  containers:
+  - name: hook
+    image: python:3.6.9-alpine3.10
+    env:
+    - name: EVENT
+      value: |
+        {
+            "ref":"master",
+            "repository": {
+                "name": "test-infra-test",
+                "full_name": "kudobuilder/test-infra-test",
+                "owner": {
+                    "name": "kudobuilder"
+                }
+            },
+            "head_commit": {
+                "id": "71ac3f1e90e834ab65fca2f978c2768c06b941cf"
+            }
+        }
+    - name: EVENT_TYPE
+      value: push
+    - name: GITHUB_TOKEN
+      valueFrom:
+        secretKeyRef:
+          name: hmac-token
+          key: hmac
+    command:
+    - python
+    - -c
+    - |
+        import urllib.request
+        import hmac
+        import hashlib
+        import os
+
+        event = os.environ['EVENT'].strip().encode()
+        eventType = os.environ['EVENT_TYPE']
+        token = os.environ['GITHUB_TOKEN'].encode()
+
+        sig = hmac.new(token, event, hashlib.sha1).hexdigest()
+        print(event, sig)
+
+        req = urllib.request.Request('http://hook.prow.svc:8888/hook', headers={
+            "X-Github-Delivery": "b7e3a88e-a43e-11e9-920f-e7331a432333",
+            "X-Hub-Signature": "sha1={}".format(sig),
+            "Content-Type": "application/json",
+            "X-GitHub-Event": eventType
+        }, method='POST')
+
+        with urllib.request.urlopen(req, data=event, timeout=10) as resp:
+            pass

@@ -1,0 +1,221 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  namespace: prow
+  name: plugins
+data:
+  plugins.yaml: |
+    repo_milestone:
+      '':
+        maintainers_id: 435318
+        maintainers_team: kudobuilder
+
+    require_matching_label:
+    - missing_label: needs-kind
+      prs: true
+      org: kudobuilder
+      regexp: ^kind/
+    - missing_label: needs-priority
+      issues: true
+      org: kudobuilder
+      regexp: ^priority/
+
+    plugins:
+      kudobuilder/test-infra:
+      - approve
+      - assign
+      - blunderbuss
+      - branchcleaner
+      - docs-no-retest
+      - help
+      - hold
+      - label
+      - lgtm
+      - lifecycle
+      - milestone
+      - override
+      - require-matching-label
+      - size
+      - skip
+      - slackevents
+      - trigger
+      - verify-owners
+      - welcome
+      - wip
+
+      kudobuilder/test-infra-test:
+      - trigger
+
+    external_plugins:
+      kudobuilder/test-infra:
+      - name: needs-rebase
+        events:
+        - pull_request
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  namespace: prow
+  name: config
+data:
+  config.yaml: |
+    prowjob_namespace: prow-jobs
+    pod_namespace: prow-tests
+
+    log_level: debug
+
+    # periodics run on a schedule.
+    periodics: []
+
+    # postsubmits run on push.
+    postsubmits:
+      kudobuilder/test-infra-test:
+      - name: test-docker
+        always_run: true
+        spec:
+          containers:
+          - image: docker:18.09.7-dind@sha256:2e56e3035fc9e220190d3c437ea38fdf7fd4933be4715e74c155a5ee5cbcbe84
+            command:
+            - /bin/sh
+            - -c
+            - |
+                set -e
+
+                dockerd --bip=172.18.0.1/16 &
+                trap 'killall -9 dockerd' EXIT
+
+                until docker ps; do echo "Waiting for dockerd..."; sleep 1; done
+
+                docker run alpine
+            securityContext:
+              privileged: true
+            volumeMounts:
+            - mountPath: /lib/modules
+              name: modules
+              readOnly: true
+            - mountPath: /sys/fs/cgroup
+              name: cgroup
+          volumes:
+          - name: modules
+            hostPath:
+              path: /lib/modules
+              type: Directory
+          - name: cgroup
+            hostPath:
+              path: /sys/fs/cgroup
+              type: Directory
+
+    presubmits:
+      kudobuilder/test-infra:
+      - name: test
+        always_run: true
+        decorate: true
+        decoration_config:
+          ssh_key_secrets:
+          - ssh-secret
+        clone_uri: "git@github.com:kudobuilder/test-infra.git"
+        spec:
+          containers:
+          - image: docker:18.09.7-dind@sha256:2e56e3035fc9e220190d3c437ea38fdf7fd4933be4715e74c155a5ee5cbcbe84
+            command:
+            - /bin/sh
+            - -c
+            - |
+                set -e
+
+                dockerd &
+                trap 'killall -9 dockerd' EXIT
+
+                until docker ps; do echo "Waiting for dockerd..."; sleep 1; done
+                ./build.sh
+            securityContext:
+              privileged: true
+            volumeMounts:
+            - mountPath: /lib/modules
+              name: modules
+              readOnly: true
+            - mountPath: /sys/fs/cgroup
+              name: cgroup
+          volumes:
+          - name: modules
+            hostPath:
+              path: /lib/modules
+              type: Directory
+          - name: cgroup
+            hostPath:
+              path: /sys/fs/cgroup
+              type: Directory
+
+    tide:
+      target_url: https://prow.kudo.dev/tide
+
+      queries:
+      - repos:
+        - kudobuilder/test-infra
+        labels:
+        - lgtm
+        - approved
+        missingLabels:
+        - do-not-merge
+        - do-not-merge/hold
+        - do-not-merge/invalid-owners-file
+        - do-not-merge/work-in-progress
+        - needs-ok-to-test
+        - needs-rebase
+        - needs-kind
+        - needs-priority
+
+      merge_method:
+        kudobuilder: squash
+
+    sinker:
+      resync_period: 1m
+      max_prowjob_age: 48h
+      max_pod_age: 2h
+
+    plank:
+      job_url_prefix: https://prow.kudo.dev/view/gcs/
+      default_decoration_config:
+        timeout: 7200000000000 # 2h
+        grace_period: 15000000000 # 15s
+        utility_images:
+          clonerefs: "gcr.io/k8s-prow/clonerefs:v20190503-f018ebad7"
+          initupload: "gcr.io/k8s-prow/initupload:v20190503-f018ebad7"
+          entrypoint: "gcr.io/k8s-prow/entrypoint:v20190503-f018ebad7"
+          sidecar: "gcr.io/k8s-prow/sidecar:v20190503-f018ebad7"
+        gcs_configuration:
+          bucket: "kudo-prow-logs"
+          path_strategy: "legacy"
+          default_org: "kudobuilder"
+          default_repo: "test-infra"
+        gcs_credentials_secret: "gcs-service-account"
+
+    deck:
+      spyglass:
+        gcs_browser_prefix: https://console.cloud.google.com/storage/browser/
+        size_limit: 500000000 # 500MB
+        viewers:
+          "started.json|finished.json":
+          - "metadata"
+          "build-log.txt":
+          - "buildlog"
+          "artifacts/junit.*\\.xml":
+          - "junit"
+          "artifacts/filtered.cov":
+          - "coverage"
+      tide_update_period: 1s
+      rerun_auth_config:
+        authorized_users:
+        - jbarrick-mesosphere
+
+    branch-protection:
+      orgs:
+        kudobuilder:
+          repos:
+            test-infra:
+              protect: true
+              enforce_admins: true
+              required_pull_request_reviews:
+                dismiss_stale_reviews: true
+              required_status_checks:
+                strict: true

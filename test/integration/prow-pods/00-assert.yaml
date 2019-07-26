@@ -1,0 +1,111 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: deck
+  namespace: prow
+status:
+  conditions:
+  - reason: MinimumReplicasAvailable
+    status: "True"
+    type: Available
+  - reason: NewReplicaSetAvailable
+    status: "True"
+    type: Progressing
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: hook
+  namespace: prow
+status:
+  conditions:
+  - reason: MinimumReplicasAvailable
+    status: "True"
+    type: Available
+  - reason: NewReplicaSetAvailable
+    status: "True"
+    type: Progressing
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: horologium
+  namespace: prow
+status:
+  conditions:
+  - reason: MinimumReplicasAvailable
+    status: "True"
+    type: Available
+  - reason: NewReplicaSetAvailable
+    status: "True"
+    type: Progressing
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: plank
+  namespace: prow
+status:
+  conditions:
+  - reason: MinimumReplicasAvailable
+    status: "True"
+    type: Available
+  - reason: NewReplicaSetAvailable
+    status: "True"
+    type: Progressing
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sinker
+  namespace: prow
+status:
+  conditions:
+  - reason: MinimumReplicasAvailable
+    status: "True"
+    type: Available
+  - reason: NewReplicaSetAvailable
+    status: "True"
+    type: Progressing
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: statusreconciler
+  namespace: prow
+status:
+  conditions:
+  - reason: MinimumReplicasAvailable
+    status: "True"
+    type: Available
+  - reason: NewReplicaSetAvailable
+    status: "True"
+    type: Progressing
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tide
+  namespace: prow
+status:
+  conditions:
+  - reason: MinimumReplicasAvailable
+    status: "True"
+    type: Available
+  - reason: NewReplicaSetAvailable
+    status: "True"
+    type: Progressing
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: needs-rebase
+  namespace: prow
+status:
+  conditions:
+  - reason: MinimumReplicasAvailable
+    status: "True"
+    type: Available
+  - reason: NewReplicaSetAvailable
+    status: "True"
+    type: Progressing
