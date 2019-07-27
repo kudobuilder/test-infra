@@ -21,7 +21,7 @@ resource "kubernetes_ingress" "ing" {
 
       http {
         path {
-          path = "/"
+          path = "/*"
 
           backend {
             service_name = "deck"
