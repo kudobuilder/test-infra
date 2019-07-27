@@ -4,8 +4,14 @@ metadata:
   name: letsencrypt
 spec:
   acme:
-    email: kudo-ci@mesosphere.io
+    email: kudo-ci@prow.kudo.dev
     server: https://acme-v02.api.letsencrypt.org/directory
     privateKeySecretRef:
-      name: letsencrypt-prod
-    http01: {}
+      name: letsencrypt-account-key
+    solvers:
+    - dns01:
+        clouddns:
+          project: maestro-229419
+          serviceAccountSecretRef:
+            name: gcp-service-account
+            key: service-account.json

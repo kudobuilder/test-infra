@@ -12,12 +12,12 @@ resource "kubernetes_ingress" "ing" {
 
   spec {
     tls {
-      hosts       = ["prow.kudo.dev"]
+      hosts = [var.hostname]
       secret_name = "prow-cert"
     }
 
     rule {
-      host = "prow.kudo.dev"
+      host = var.hostname
 
       http {
         path {
