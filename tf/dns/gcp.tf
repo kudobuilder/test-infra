@@ -32,7 +32,7 @@ resource "kubernetes_secret" "dns" {
 }
 
 resource "google_project_iam_binding" "dns-admin" {
-  role               = "roles/dns.admin"
+  role = "roles/dns.admin"
 
   members = [
     "serviceAccount:${google_service_account.dns.email}"

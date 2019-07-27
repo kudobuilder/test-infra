@@ -5,7 +5,7 @@ resource "google_project_service" "dns" {
 }
 
 resource "google_dns_managed_zone" "zone" {
-  name = var.name
+  name     = var.name
   dns_name = "${var.zone}."
 }
 

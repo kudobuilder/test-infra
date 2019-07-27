@@ -12,7 +12,7 @@ resource "kubernetes_ingress" "ing" {
 
   spec {
     tls {
-      hosts = [var.hostname]
+      hosts       = [var.hostname]
       secret_name = "prow-cert"
     }
 
@@ -46,7 +46,7 @@ variable "hostname" {}
 
 output "address" {
   value = [
-    for lb in kubernetes_ingress.ing.load_balancer_ingress:
-      lb.ip
+    for lb in kubernetes_ingress.ing.load_balancer_ingress :
+    lb.ip
   ]
 }

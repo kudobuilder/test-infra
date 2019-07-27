@@ -25,10 +25,10 @@ provider "kubernetes" {
 }
 
 module "dns" {
-  source = "./dns"
+  source  = "./dns"
   address = module.prow.address
-  name = "prow"
-  zone = var.zone
+  name    = "prow"
+  zone    = var.zone
 }
 
 module "kms" {
@@ -42,25 +42,25 @@ module "kubernetes" {
   source = "./gke"
 
   cluster_name = "prow-prod"
-  location = "us-east4"
-  node_type = "n1-standard-4"
-  num_nodes = 4
+  location     = "us-east4"
+  node_type    = "n1-standard-4"
+  num_nodes    = 4
 }
 
 module "flux" {
   source = "./flux"
 
   config_repo_user = "kudobuilder"
-  config_repo = "test-infra"
+  config_repo      = "test-infra"
 
-  slack_token = "${data.google_kms_secret.slack_token.plaintext}"
+  slack_token   = "${data.google_kms_secret.slack_token.plaintext}"
   slack_channel = "#slack-testing"
 }
 
 module "prow" {
   source = "./prow"
 
-  hostname = var.zone
+  hostname        = var.zone
   gcs_bucket_name = "kudo-prow-logs"
   github_token    = "${data.google_kms_secret.github.plaintext}"
 }
