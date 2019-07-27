@@ -7,7 +7,7 @@ resource "github_repository_webhook" "prow" {
   repository = "${element(var.repositories, count.index)}"
 
   configuration {
-    url          = "https://prow.${var.zone}/hook"
+    url          = "https://${var.zone}/hook"
     content_type = "json"
     insecure_ssl = false
     secret       = "${var.prow_hmac}"
