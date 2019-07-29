@@ -7,6 +7,7 @@ resource "kubernetes_ingress" "ing" {
 
     annotations = {
       "certmanager.k8s.io/cluster-issuer" = "letsencrypt"
+      "kubernetes.io/ingress.allow-http"  = "false"
     }
   }
 
