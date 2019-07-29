@@ -125,6 +125,8 @@ data:
     postsubmits:
       kudobuilder/test-infra-test:
       - name: test-docker
+        labels:
+          dind: "true"
         always_run: true
         spec:
           containers:
@@ -143,25 +145,12 @@ data:
                 docker run alpine
             securityContext:
               privileged: true
-            volumeMounts:
-            - mountPath: /lib/modules
-              name: modules
-              readOnly: true
-            - mountPath: /sys/fs/cgroup
-              name: cgroup
-          volumes:
-          - name: modules
-            hostPath:
-              path: /lib/modules
-              type: Directory
-          - name: cgroup
-            hostPath:
-              path: /sys/fs/cgroup
-              type: Directory
 
     presubmits:
       kudobuilder/test-infra:
       - name: test
+        labels:
+          dind: "true"
         always_run: true
         decorate: true
         decoration_config:
@@ -184,21 +173,6 @@ data:
                 ./build.sh
             securityContext:
               privileged: true
-            volumeMounts:
-            - mountPath: /lib/modules
-              name: modules
-              readOnly: true
-            - mountPath: /sys/fs/cgroup
-              name: cgroup
-          volumes:
-          - name: modules
-            hostPath:
-              path: /lib/modules
-              type: Directory
-          - name: cgroup
-            hostPath:
-              path: /sys/fs/cgroup
-              type: Directory
 
       kudobuilder/kudo:
       - name: test
@@ -226,6 +200,155 @@ data:
               value: /home/prow/go/bin
             - name: PATH
               value: /home/prow/go/bin:/usr/local/go/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/local/kubebuilder/bin
+
+      kudobuilder/operators:
+      - name: test-kubernetes-1.15
+        labels:
+          dind: "true"
+        always_run: true
+        decorate: true
+        decoration_config:
+          ssh_key_secrets:
+          - ssh-secret
+        clone_uri: "git@github.com:kudobuilder/operators.git"
+        spec:
+          containers:
+          - image: docker:18.09.7-dind@sha256:2e56e3035fc9e220190d3c437ea38fdf7fd4933be4715e74c155a5ee5cbcbe84
+            env:
+            - name: KUBERNETES_VERSION
+              value: "1.15.0"
+            command:
+            - /bin/sh
+            - -c
+            - |
+                set -e
+
+                dockerd &
+                trap 'killall -9 dockerd' EXIT
+
+                until docker ps; do echo "Waiting for dockerd..."; sleep 1; done
+
+                apk add curl make
+
+                make KUBERNETES_VERSION=$KUBERNETES_VERSION create-cluster
+                make test
+            securityContext:
+              privileged: true
+      - name: test-kubernetes-1.14
+        labels:
+          dind: "true"
+        always_run: true
+        decorate: true
+        decoration_config:
+          ssh_key_secrets:
+          - ssh-secret
+        clone_uri: "git@github.com:kudobuilder/operators.git"
+        spec:
+          containers:
+          - image: docker:18.09.7-dind@sha256:2e56e3035fc9e220190d3c437ea38fdf7fd4933be4715e74c155a5ee5cbcbe84
+            env:
+            - name: KUBERNETES_VERSION
+              value: "1.14.3"
+            command:
+            - /bin/sh
+            - -c
+            - |
+                set -e
+
+                dockerd &
+                trap 'killall -9 dockerd' EXIT
+
+                until docker ps; do echo "Waiting for dockerd..."; sleep 1; done
+
+                apk add curl make
+
+                make KUBERNETES_VERSION=$KUBERNETES_VERSION create-cluster
+                make test
+            securityContext:
+              privileged: true
+      - name: test-kubernetes-1.13
+        labels:
+          dind: "true"
+        always_run: true
+        decorate: true
+        decoration_config:
+          ssh_key_secrets:
+          - ssh-secret
+        clone_uri: "git@github.com:kudobuilder/operators.git"
+        spec:
+          containers:
+          - image: docker:18.09.7-dind@sha256:2e56e3035fc9e220190d3c437ea38fdf7fd4933be4715e74c155a5ee5cbcbe84
+            env:
+            - name: KUBERNETES_VERSION
+              value: "1.13.7"
+            command:
+            - /bin/sh
+            - -c
+            - |
+                set -e
+
+                dockerd &
+                trap 'killall -9 dockerd' EXIT
+
+                until docker ps; do echo "Waiting for dockerd..."; sleep 1; done
+
+                apk add curl make
+
+                make KUBERNETES_VERSION=$KUBERNETES_VERSION create-cluster
+                make test
+            securityContext:
+              privileged: true
+      - name: test-kubernetes-1.12
+        labels:
+          dind: "true"
+        always_run: true
+        decorate: true
+        decoration_config:
+          ssh_key_secrets:
+          - ssh-secret
+        clone_uri: "git@github.com:kudobuilder/operators.git"
+        spec:
+          containers:
+          - image: docker:18.09.7-dind@sha256:2e56e3035fc9e220190d3c437ea38fdf7fd4933be4715e74c155a5ee5cbcbe84
+            env:
+            - name: KUBERNETES_VERSION
+              value: "1.12.9"
+            command:
+            - /bin/sh
+            - -c
+            - |
+                set -e
+
+                dockerd &
+                trap 'killall -9 dockerd' EXIT
+
+                until docker ps; do echo "Waiting for dockerd..."; sleep 1; done
+
+                apk add curl make
+
+                make KUBERNETES_VERSION=$KUBERNETES_VERSION create-cluster
+                make test
+            securityContext:
+              privileged: true
+
+    presets:
+    - labels:
+        dind: "true"
+      volumes:
+      - name: modules
+        hostPath:
+          path: /lib/modules
+          type: Directory
+      - name: cgroup
+        hostPath:
+          path: /sys/fs/cgroup
+          type: Directory
+      volumeMounts:
+      - mountPath: /lib/modules
+        name: modules
+        readOnly: true
+      - mountPath: /sys/fs/cgroup
+        name: cgroup
 
     tide:
       target_url: https://prow.kudo.dev/tide
