@@ -72,8 +72,9 @@ module "kudobuilder-repo" {
   prow_hmac = "${module.prow.prow-hmac}"
 
   repositories = [
-    "test-infra",
-    "kudo"
+    "kudo",
+    "operators",
+    "test-infra"
   ]
 }
 

@@ -43,11 +43,65 @@ data:
       - welcome
       - wip
 
+      kudobuilder/kudo:
+      - approve
+      - assign
+      - blunderbuss
+      - branchcleaner
+      - docs-no-retest
+      - help
+      - hold
+      - label
+      - lgtm
+      - lifecycle
+      - milestone
+      - override
+      - require-matching-label
+      - size
+      - skip
+      - slackevents
+      - trigger
+      - verify-owners
+      - welcome
+      - wip
+
+      kudobuilder/operators:
+      - approve
+      - assign
+      - blunderbuss
+      - branchcleaner
+      - docs-no-retest
+      - help
+      - hold
+      - label
+      - lgtm
+      - lifecycle
+      - milestone
+      - override
+      - require-matching-label
+      - size
+      - skip
+      - slackevents
+      - trigger
+      - verify-owners
+      - welcome
+      - wip
+
       kudobuilder/test-infra-test:
       - trigger
 
     external_plugins:
       kudobuilder/test-infra:
+      - name: needs-rebase
+        events:
+        - pull_request
+
+      kudobuilder/kudo:
+      - name: needs-rebase
+        events:
+        - pull_request
+
+      kudobuilder/operators:
       - name: needs-rebase
         events:
         - pull_request
@@ -152,6 +206,8 @@ data:
       queries:
       - repos:
         - kudobuilder/test-infra
+        - kudobuilder/kudo
+        - kudobuilder/operators
         labels:
         - lgtm
         - approved
