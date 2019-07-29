@@ -200,6 +200,27 @@ data:
               path: /sys/fs/cgroup
               type: Directory
 
+      kudobuilder/kudo:
+      - name: test
+        always_run: true
+        decorate: true
+        skip_report: true
+        decoration_config:
+          ssh_key_secrets:
+          - ssh-secret
+        clone_uri: "git@github.com:kudobuilder/kudo.git"
+        spec:
+          containers:
+          - image: kudobuilder/golang:1.12
+            command:
+            - /bin/sh
+            - -c
+            - |
+                set -e
+
+                make check-formatting
+                make integration-test
+
     tide:
       target_url: https://prow.kudo.dev/tide
 
