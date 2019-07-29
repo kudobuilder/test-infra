@@ -204,7 +204,6 @@ data:
       - name: test
         always_run: true
         decorate: true
-        skip_report: true
         decoration_config:
           ssh_key_secrets:
           - ssh-secret
@@ -220,6 +219,13 @@ data:
 
                 make check-formatting
                 make integration-test
+            env:
+            - name: GOPROXY
+              value: https://proxy.golang.org
+            - name: GOBIN
+              value: /home/prow/go/bin
+            - name: PATH
+              value: /home/prow/go/bin:/usr/local/go/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/local/kubebuilder/bin
 
     tide:
       target_url: https://prow.kudo.dev/tide
