@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: trigger-hook
+  namespace: prow
+status:
+  phase: Succeeded

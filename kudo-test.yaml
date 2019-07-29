@@ -1,0 +1,11 @@
+apiVersion: kudo.dev/v1alpha1
+kind: TestSuite
+crdDir: ./cluster/prow/
+manifestDirs:
+- ./test/manifests/
+- ./cluster/prow/
+- ./prow-jobs/
+testDirs:
+- ./test/integration/
+startKIND: true
+timeout: 300

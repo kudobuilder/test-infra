@@ -1,0 +1,876 @@
+apiVersion: apiextensions.k8s.io/v1beta1
+kind: CustomResourceDefinition
+metadata:
+  name: prowjobs.prow.k8s.io
+spec:
+  group: prow.k8s.io
+  version: v1
+  names:
+    kind: ProwJob
+    singular: prowjob
+    plural: prowjobs
+  scope: Namespaced
+  validation:
+    openAPIV3Schema:
+      properties:
+        spec:
+          properties:
+            max_concurrency:
+              type: integer
+              minimum: 0
+            type:
+              type: string
+              enum:
+              - "presubmit"
+              - "postsubmit"
+              - "periodic"
+              - "batch"
+        status:
+          properties:
+            state:
+              type: string
+              enum:
+              - "triggered"
+              - "pending"
+              - "success"
+              - "failure"
+              - "aborted"
+              - "error"
+          anyOf:
+          - not:
+              properties:
+                state:
+                  type: string
+                  enum:
+                  - "success"
+                  - "failure"
+                  - "error"
+                  - "aborted"
+          - required:
+            - completionTime
+  additionalPrinterColumns:
+  - name: Job
+    type: string
+    description: The name of the job being run.
+    JSONPath: .spec.job
+  - name: BuildId
+    type: string
+    description: The ID of the job being run.
+    JSONPath: .status.build_id
+  - name: Type
+    type: string
+    description: The type of job being run.
+    JSONPath: .spec.type
+  - name: Org
+    type: string
+    description: The org for which the job is running.
+    JSONPath: .spec.refs.org
+  - name: Repo
+    type: string
+    description: The repo for which the job is running.
+    JSONPath: .spec.refs.repo
+  - name: Pulls
+    type: string
+    description: The pulls for which the job is running.
+    JSONPath: ".spec.refs.pulls[*].number"
+  - name: StartTime
+    type: date
+    description: When the job started running.
+    JSONPath: .status.startTime
+  - name: CompletionTime
+    type: date
+    description: When the job finished running.
+    JSONPath: .status.completionTime
+  - name: State
+    description: The state of the job.
+    type: string
+    JSONPath: .status.state
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: prow-jobs
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  namespace: prow
+  name: hook
+  labels:
+    app: hook
+spec:
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 1
+  selector:
+    matchLabels:
+      app: hook
+  template:
+    metadata:
+      labels:
+        app: hook
+    spec:
+      serviceAccountName: "hook"
+      terminationGracePeriodSeconds: 180
+      containers:
+      - name: hook
+        image: gcr.io/k8s-prow/hook:v20190509-e4185298e
+        imagePullPolicy: Always
+        args:
+        - --dry-run=false
+        - --github-endpoint=$(GITHUB_URL)
+        - --config-path=/etc/config/config.yaml
+        - --deck-url=https://prow.kudo.dev/
+        env:
+        - name: GITHUB_URL
+          valueFrom:
+            configMapKeyRef:
+              name: prow-env-config
+              key: GITHUB_URL
+        ports:
+          - name: http
+            containerPort: 8888
+        volumeMounts:
+        - name: hmac
+          mountPath: /etc/webhook
+          readOnly: true
+        - name: oauth
+          mountPath: /etc/github
+          readOnly: true
+        - name: config
+          mountPath: /etc/config
+          readOnly: true
+        - name: plugins
+          mountPath: /etc/plugins
+          readOnly: true
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: 8081
+          initialDelaySeconds: 3
+          periodSeconds: 3
+        readinessProbe:
+          httpGet:
+            path: /healthz/ready
+            port: 8081
+          initialDelaySeconds: 10
+          periodSeconds: 3
+          timeoutSeconds: 600
+      volumes:
+      - name: hmac
+        secret:
+          secretName: hmac-token
+      - name: oauth
+        secret:
+          secretName: oauth-token
+      - name: config
+        configMap:
+          name: config
+      - name: plugins
+        configMap:
+          name: plugins
+---
+apiVersion: v1
+kind: Service
+metadata:
+  namespace: prow
+  name: hook
+  labels:
+    app: hook
+spec:
+  selector:
+    app: hook
+  ports:
+  - name: main
+    port: 8888
+  - name: metrics
+    port: 9090
+  type: NodePort
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  namespace: prow
+  name: plank
+  labels:
+    app: plank
+spec:
+  replicas: 1 # Do not scale up.
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: plank
+  template:
+    metadata:
+      labels:
+        app: plank
+    spec:
+      serviceAccountName: "plank"
+      containers:
+      - name: plank
+        image: gcr.io/k8s-prow/plank:v20190509-e4185298e
+        args:
+        - --dry-run=false
+        - --config-path=/etc/config/config.yaml
+        volumeMounts:
+        - name: oauth
+          mountPath: /etc/github
+          readOnly: true
+        - name: config
+          mountPath: /etc/config
+          readOnly: true
+      volumes:
+      - name: oauth
+        secret:
+          secretName: oauth-token
+      - name: config
+        configMap:
+          name: config
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  namespace: prow
+  name: sinker
+  labels:
+    app: sinker
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: sinker
+  template:
+    metadata:
+      labels:
+        app: sinker
+    spec:
+      serviceAccountName: "sinker"
+      containers:
+      - name: sinker
+        image: gcr.io/k8s-prow/sinker:v20190509-e4185298e
+        args:
+        - --config-path=/etc/config/config.yaml
+        volumeMounts:
+        - name: config
+          mountPath: /etc/config
+          readOnly: true
+      volumes:
+      - name: config
+        configMap:
+          name: config
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  namespace: prow
+  name: deck
+  labels:
+    app: deck
+spec:
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 1
+  selector:
+    matchLabels:
+      app: deck
+  template:
+    metadata:
+      labels:
+        app: deck
+    spec:
+      serviceAccountName: "deck"
+      terminationGracePeriodSeconds: 30
+      containers:
+      - name: deck
+        image: gcr.io/k8s-prow/deck:v20190509-e4185298e
+        args:
+        - --config-path=/etc/config/config.yaml
+        - --spyglass
+        - --tide-url=http://tide/
+        - --hook-url=http://hook:8888/plugin-help
+        ports:
+          - name: http
+            containerPort: 8080
+        volumeMounts:
+        - name: config
+          mountPath: /etc/config
+          readOnly: true
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: 8081
+          initialDelaySeconds: 3
+          periodSeconds: 3
+        readinessProbe:
+          httpGet:
+            path: /healthz/ready
+            port: 8081
+          initialDelaySeconds: 10
+          periodSeconds: 3
+          timeoutSeconds: 600
+      volumes:
+      - name: config
+        configMap:
+          name: config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  namespace: prow
+  name: deck
+  labels:
+    app: deck
+spec:
+  selector:
+    app: deck
+  ports:
+  - name: main
+    port: 80
+    targetPort: 8080
+  - name: metrics
+    port: 9090
+  type: NodePort
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  namespace: prow
+  name: horologium
+  labels:
+    app: horologium
+spec:
+  replicas: 1 # Do not scale up.
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: horologium
+  template:
+    metadata:
+      labels:
+        app: horologium
+    spec:
+      serviceAccountName: "horologium"
+      terminationGracePeriodSeconds: 30
+      containers:
+      - name: horologium
+        image: gcr.io/k8s-prow/horologium:v20190509-e4185298e
+        args:
+        - --config-path=/etc/config/config.yaml
+        volumeMounts:
+        - name: config
+          mountPath: /etc/config
+          readOnly: true
+      volumes:
+      - name: config
+        configMap:
+          name: config
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  namespace: prow
+  name: tide
+  labels:
+    app: tide
+spec:
+  replicas: 1 # Do not scale up.
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: tide
+  template:
+    metadata:
+      labels:
+        app: tide
+    spec:
+      serviceAccountName: "tide"
+      containers:
+      - name: tide
+        image: gcr.io/k8s-prow/tide:v20190509-e4185298e
+        args:
+        - --dry-run=false
+        - --config-path=/etc/config/config.yaml
+        - --github-endpoint=$(GITHUB_URL)
+        env:
+        - name: GITHUB_URL
+          valueFrom:
+            configMapKeyRef:
+              name: prow-env-config
+              key: GITHUB_URL
+
+        ports:
+          - name: http
+            containerPort: 8888
+        volumeMounts:
+        - name: oauth
+          mountPath: /etc/github
+          readOnly: true
+        - name: config
+          mountPath: /etc/config
+          readOnly: true
+      volumes:
+      - name: oauth
+        secret:
+          secretName: oauth-token
+      - name: config
+        configMap:
+          name: config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  namespace: prow
+  name: tide
+  labels:
+    app: tide
+spec:
+  selector:
+    app: tide
+  ports:
+  - name: main
+    port: 80
+    targetPort: 8888
+  - port: 9090
+    name: metrics
+  type: NodePort
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: statusreconciler
+  namespace: prow
+  labels:
+    app: statusreconciler
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: statusreconciler
+  template:
+    metadata:
+      labels:
+        app: statusreconciler
+    spec:
+      serviceAccountName: statusreconciler
+      terminationGracePeriodSeconds: 180
+      containers:
+      - name: statusreconciler
+        image: gcr.io/k8s-prow/status-reconciler:v20190509-e4185298e
+        args:
+        - --dry-run=false
+        - --continue-on-error=true
+        - --plugin-config=/etc/plugins/plugins.yaml
+        - --config-path=/etc/config/config.yaml
+        - --github-token-path=/etc/github/oauth
+        volumeMounts:
+        - name: oauth
+          mountPath: /etc/github
+          readOnly: true
+        - name: config
+          mountPath: /etc/config
+          readOnly: true
+        - name: plugins
+          mountPath: /etc/plugins
+          readOnly: true
+      volumes:
+      - name: oauth
+        secret:
+          secretName: oauth-token
+      - name: config
+        configMap:
+          name: config
+      - name: plugins
+        configMap:
+          name: plugins
+---
+
+#### RBAC FOR DECK
+kind: ServiceAccount
+apiVersion: v1
+metadata:
+  namespace: prow
+  name: "deck"
+---
+##### prow-jobs rbac (deck)
+kind: Role
+apiVersion: rbac.authorization.k8s.io/v1beta1
+metadata:
+  namespace: prow-jobs
+  name: "deck"
+rules:
+  - apiGroups:
+      - "prow.k8s.io"
+    resources:
+      - prowjobs
+    verbs:
+      - get
+      - list
+---
+kind: RoleBinding
+apiVersion: rbac.authorization.k8s.io/v1beta1
+metadata:
+  namespace: prow-jobs
+  name: "deck"
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: "deck"
+subjects:
+- kind: ServiceAccount
+  name: "deck"
+  namespace: prow
+---
+##### prow-tests rbac (deck)
+kind: Role
+apiVersion: rbac.authorization.k8s.io/v1beta1
+metadata:
+  namespace: prow-tests
+  name: "deck"
+rules:
+  - apiGroups:
+      - ""
+    resources:
+      - pods/log
+    verbs:
+      - get
+---
+kind: RoleBinding
+apiVersion: rbac.authorization.k8s.io/v1beta1
+metadata:
+  namespace: prow-tests
+  name: "deck"
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: "deck"
+subjects:
+- kind: ServiceAccount
+  name: "deck"
+  namespace: prow
+---
+
+#### RBAC FOR HOROLOGIUM
+kind: ServiceAccount
+apiVersion: v1
+metadata:
+  namespace: prow
+  name: "horologium"
+---
+##### prow-jobs rbac (horologium)
+kind: Role
+apiVersion: rbac.authorization.k8s.io/v1beta1
+metadata:
+  namespace: prow-jobs
+  name: "horologium"
+rules:
+  - apiGroups:
+      - "prow.k8s.io"
+    resources:
+      - prowjobs
+    verbs:
+      - create
+      - list
+---
+kind: RoleBinding
+apiVersion: rbac.authorization.k8s.io/v1beta1
+metadata:
+  namespace: prow-jobs
+  name: "horologium"
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: "horologium"
+subjects:
+- kind: ServiceAccount
+  name: "horologium"
+  namespace: prow
+---
+
+#### RBAC FOR PLANK
+kind: ServiceAccount
+apiVersion: v1
+metadata:
+  namespace: prow
+  name: "plank"
+---
+##### prow-jobs rbac (plank)
+kind: Role
+apiVersion: rbac.authorization.k8s.io/v1beta1
+metadata:
+  namespace: prow-jobs
+  name: "plank"
+rules:
+  - apiGroups:
+      - "prow.k8s.io"
+    resources:
+      - prowjobs
+    verbs:
+      - get
+      - create
+      - list
+      - update
+---
+kind: RoleBinding
+apiVersion: rbac.authorization.k8s.io/v1beta1
+metadata:
+  namespace: prow-jobs
+  name: "plank"
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: "plank"
+subjects:
+- kind: ServiceAccount
+  name: "plank"
+  namespace: prow
+---
+##### prow-tests rbac (plank)
+kind: Role
+apiVersion: rbac.authorization.k8s.io/v1beta1
+metadata:
+  namespace: prow-tests
+  name: "plank"
+rules:
+  - apiGroups:
+      - ""
+    resources:
+      - pods
+    verbs:
+      - create
+      - delete
+      - list
+---
+kind: RoleBinding
+apiVersion: rbac.authorization.k8s.io/v1beta1
+metadata:
+  namespace: prow-tests
+  name: "plank"
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: "plank"
+subjects:
+- kind: ServiceAccount
+  name: "plank"
+  namespace: prow
+---
+
+#### RBAC FOR SINKER
+kind: ServiceAccount
+apiVersion: v1
+metadata:
+  namespace: prow
+  name: "sinker"
+---
+##### prow-jobs rbac (sinker)
+kind: Role
+apiVersion: rbac.authorization.k8s.io/v1beta1
+metadata:
+  namespace: prow-jobs
+  name: "sinker"
+rules:
+  - apiGroups:
+      - "prow.k8s.io"
+    resources:
+      - prowjobs
+    verbs:
+      - delete
+      - list
+---
+kind: RoleBinding
+apiVersion: rbac.authorization.k8s.io/v1beta1
+metadata:
+  namespace: prow-jobs
+  name: "sinker"
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: "sinker"
+subjects:
+- kind: ServiceAccount
+  name: "sinker"
+  namespace: prow
+---
+##### prow-tests rbac (sinker)
+kind: Role
+apiVersion: rbac.authorization.k8s.io/v1beta1
+metadata:
+  namespace: prow-tests
+  name: "sinker"
+rules:
+  - apiGroups:
+      - ""
+    resources:
+      - pods
+    verbs:
+      - delete
+      - list
+---
+kind: RoleBinding
+apiVersion: rbac.authorization.k8s.io/v1beta1
+metadata:
+  namespace: prow-tests
+  name: "sinker"
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: "sinker"
+subjects:
+- kind: ServiceAccount
+  name: "sinker"
+  namespace: prow
+---
+
+#### RBAC FOR HOOK
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  namespace: prow
+  name: "hook"
+---
+##### prow-jobs rbac (hook)
+kind: Role
+apiVersion: rbac.authorization.k8s.io/v1beta1
+metadata:
+  namespace: prow-jobs
+  name: "hook"
+rules:
+  - apiGroups:
+      - "prow.k8s.io"
+    resources:
+      - prowjobs
+    verbs:
+      - create
+      - get
+  - apiGroups:
+      - ""
+    resources:
+      - configmaps
+    verbs:
+      - create
+      - get
+      - update
+---
+kind: RoleBinding
+apiVersion: rbac.authorization.k8s.io/v1beta1
+metadata:
+  namespace: prow-jobs
+  name: "hook"
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: "hook"
+subjects:
+- kind: ServiceAccount
+  name: "hook"
+  namespace: prow
+---
+
+#### RBAC FOR TIDE
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  namespace: prow
+  name: "tide"
+---
+##### prow-jobs rbac (tide)
+kind: Role
+apiVersion: rbac.authorization.k8s.io/v1beta1
+metadata:
+  namespace: prow-jobs
+  name: "tide"
+rules:
+  - apiGroups:
+      - "prow.k8s.io"
+    resources:
+      - prowjobs
+    verbs:
+      - create
+      - list
+---
+kind: RoleBinding
+apiVersion: rbac.authorization.k8s.io/v1beta1
+metadata:
+  namespace: prow-jobs
+  name: "tide"
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: "tide"
+subjects:
+- kind: ServiceAccount
+  name: "tide"
+  namespace: prow
+---
+
+#### RBAC FOR STATUSRECONCILER
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  namespace: prow
+  name: "statusreconciler"
+---
+##### prow-jobs rbac (statusreconciler)
+kind: Role
+apiVersion: rbac.authorization.k8s.io/v1beta1
+metadata:
+  namespace: prow-jobs
+  name: "statusreconciler"
+rules:
+  - apiGroups:
+      - "prow.k8s.io"
+    resources:
+      - prowjobs
+    verbs:
+      - create
+---
+kind: RoleBinding
+apiVersion: rbac.authorization.k8s.io/v1beta1
+metadata:
+  namespace: prow-jobs
+  name: "statusreconciler"
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: "statusreconciler"
+subjects:
+- kind: ServiceAccount
+  name: "statusreconciler"
+  namespace: prow
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: sinker
+  namespace: prow
+  name: sinker
+spec:
+  ports:
+    - name: metrics
+      port: 9090
+  selector:
+    app: sinker
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: plank
+  namespace: prow
+  name: plank
+spec:
+  ports:
+    - name: metrics
+      port: 9090
+  selector:
+    app: plank

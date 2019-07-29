@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prow-env-config
+  namespace: prow
+data:
+  GITHUB_URL: http://github.default.svc
