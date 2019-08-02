@@ -230,8 +230,7 @@ data:
 
                 apk add curl make
 
-                make KUBERNETES_VERSION=$KUBERNETES_VERSION create-cluster
-                make test
+                make KUBERNETES_VERSION=$KUBERNETES_VERSION test
             securityContext:
               privileged: true
       - name: test-kubernetes-1.14
@@ -262,8 +261,7 @@ data:
 
                 apk add curl make
 
-                make KUBERNETES_VERSION=$KUBERNETES_VERSION create-cluster
-                make test
+                make KUBERNETES_VERSION=$KUBERNETES_VERSION test
             securityContext:
               privileged: true
       - name: test-kubernetes-1.13
@@ -294,8 +292,7 @@ data:
 
                 apk add curl make
 
-                make KUBERNETES_VERSION=$KUBERNETES_VERSION create-cluster
-                make test
+                make KUBERNETES_VERSION=$KUBERNETES_VERSION test
             securityContext:
               privileged: true
       - name: test-kubernetes-1.12
@@ -326,8 +323,7 @@ data:
 
                 apk add curl make
 
-                make KUBERNETES_VERSION=$KUBERNETES_VERSION create-cluster
-                make test
+                make KUBERNETES_VERSION=$KUBERNETES_VERSION test
             securityContext:
               privileged: true
 
