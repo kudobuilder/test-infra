@@ -184,7 +184,7 @@ data:
         clone_uri: "git@github.com:kudobuilder/kudo.git"
         spec:
           containers:
-          - image: kudobuilder/golang:1.12
+          - image: kudobuilder/golang:1.13
             command:
             - /bin/sh
             - -c
